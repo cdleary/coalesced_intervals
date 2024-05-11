@@ -10,7 +10,7 @@ on:
 
 jobs:
   test_and_publish:
-    name: Test and Publish Crate
+    name: Test and Fuzz
     runs-on: ubuntu-latest
 
     steps:

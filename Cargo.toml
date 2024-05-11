@@ -6,7 +6,7 @@ exclude = [
     ".github",
     ".gitignore",
 ]
-license-file = "LICENSE"
+license = "Apache-2.0"
 description = "Data structure for maintaining maximally-coalesced 1D intervals."
 
 [dependencies]

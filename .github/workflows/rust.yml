@@ -24,13 +24,23 @@ jobs:
         profile: minimal
         components: rustfmt, clippy
 
-    - name: Install cargo-fuzz
-      run: cargo install cargo-fuzz
-
     - name: Run cargo test
       uses: actions-rs/cargo@v1
       with:
         command: test
+
+    # Need to switch over to nightly at this point to get all the fuzzing
+    # capabilities used by `cargo fuzz`.
+
+    - name: Set up Rust nightly for fuzzing
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        profile: minimal
+        override: true
+
+    - name: Install cargo-fuzz
+      run: cargo install cargo-fuzz
 
     - name: Run cargo fuzz
       uses: actions-rs/cargo@v1

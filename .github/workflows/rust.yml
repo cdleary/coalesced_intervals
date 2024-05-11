@@ -24,6 +24,9 @@ jobs:
         profile: minimal
         components: rustfmt, clippy
 
+    - name: Install cargo-fuzz
+      run: cargo install cargo-fuzz
+
     - name: Run cargo test
       uses: actions-rs/cargo@v1
       with:

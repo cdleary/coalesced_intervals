@@ -1,0 +1,22 @@
+[package]
+name = "coalesced_intervals-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+log = "~0.4"
+
+[dependencies.coalesced_intervals]
+path = ".."
+
+[[bin]]
+name = "to_vector_validation"
+path = "fuzz_targets/to_vector_validation.rs"
+test = false
+doc = false
+bench = false

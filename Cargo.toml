@@ -6,6 +6,8 @@ exclude = [
     ".github",
     ".gitignore",
 ]
+license-file = "LICENSE"
+description = "Data structure for maintaining maximally-coalesced 1D intervals."
 
 [dependencies]
 log = "~0.4"

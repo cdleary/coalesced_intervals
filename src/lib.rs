@@ -1,11 +1,10 @@
+use core::ops::Bound;
 /// This is a conceptually simple data structure designed for the case where you have intervals
 /// that you'd like to coalesce into maximal contiguous runs.
 ///
 /// For example, if I add `[0, 1)` and then I add `[1, 2)` I should observe a single contiguous
 /// interval `[0, 2)` in the data structure.
-
 use std::collections::BTreeMap;
-use core::ops::Bound;
 
 /// Implementation note: we use two btrees, one with the starts as the keys and one with limits as
 /// the keys.
@@ -16,7 +15,10 @@ pub struct CoalescedIntervals<T> {
 
 impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     pub fn new() -> Self {
-        CoalescedIntervals{start_to_limit: BTreeMap::new(), limit_to_start: BTreeMap::new()}
+        CoalescedIntervals {
+            start_to_limit: BTreeMap::new(),
+            limit_to_start: BTreeMap::new(),
+        }
     }
 
     pub fn check_invariants(&self) {
@@ -36,11 +38,15 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     /// must be <= limit.
     fn remove_intervals_dominated_by(&mut self, start: T, limit: T) {
         let mut dominated = vec![];
-        for (candidate_start, candidate_limit) in self.start_to_limit.range((Bound::Included(start), Bound::Excluded(limit))) {
+        for (candidate_start, candidate_limit) in self
+            .start_to_limit
+            .range((Bound::Included(start), Bound::Excluded(limit)))
+        {
             if *candidate_limit <= limit {
                 dominated.push((*candidate_start, *candidate_limit));
-            } else {  // candidate_limit > limit, so we can stop looking
-                break
+            } else {
+                // candidate_limit > limit, so we can stop looking
+                break;
             }
         }
         for (s, l) in dominated {
@@ -51,22 +57,28 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
 
     fn is_dominated_by_existing(&self, start: T, limit: T) -> bool {
         // Look at the first segment that ends at-or-after limit to see if it dominates.
-        for (_existing_limit, existing_start) in self.limit_to_start.range((Bound::Included(limit), Bound::Unbounded)) {
+        for (_existing_limit, existing_start) in self
+            .limit_to_start
+            .range((Bound::Included(limit), Bound::Unbounded))
+        {
             if *existing_start <= start {
-                return true
+                return true;
             } else {
-                break
+                break;
             }
         }
         // Look at the first segment that start at-or-before start to see if it dominates.
-        for (_existing_start, existing_limit) in self.start_to_limit.range((Bound::Unbounded, Bound::Included(start))) {
+        for (_existing_start, existing_limit) in self
+            .start_to_limit
+            .range((Bound::Unbounded, Bound::Included(start)))
+        {
             if *existing_limit >= limit {
-                return true
+                return true;
             } else {
-                break
+                break;
             }
         }
-        return false
+        return false;
     }
 
     fn insert_record(&mut self, start: T, limit: T) {
@@ -100,12 +112,15 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     ///
     /// `start <= other.limit <= limit`
     fn find_collision_left(&self, start: T, limit: T) -> Option<(T, T)> {
-        for (other_limit, other_start) in self.limit_to_start.range((Bound::Included(start), Bound::Included(limit))) {
+        for (other_limit, other_start) in self
+            .limit_to_start
+            .range((Bound::Included(start), Bound::Included(limit)))
+        {
             if start <= *other_limit && *other_limit <= limit {
-                return Some((*other_start, *other_limit))
+                return Some((*other_start, *other_limit));
             }
         }
-        return None
+        return None;
     }
 
     /// Finds any collision with the right edge of the segment; e.g. where the start of another
@@ -113,12 +128,15 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     ///
     /// `start <= other.start <= limit`
     fn find_collision_right(&self, start: T, limit: T) -> Option<(T, T)> {
-        for (other_start, other_limit) in self.start_to_limit.range((Bound::Included(start), Bound::Included(limit))) {
+        for (other_start, other_limit) in self
+            .start_to_limit
+            .range((Bound::Included(start), Bound::Included(limit)))
+        {
             if start <= *other_start && *other_start <= limit {
-                return Some((*other_start, *other_limit))
+                return Some((*other_start, *other_limit));
             }
         }
-        return None
+        return None;
     }
 
     pub fn add(&mut self, item: (T, T)) {

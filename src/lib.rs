@@ -207,22 +207,28 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     /// the value `1` is not contained.
     pub fn get_interval_containing(&self, value: T) -> Option<(T, T)> {
         // We look at the first interval whose limit is after `value` to see if it overlaps.
-        for (limit, start) in self.limit_to_start.range((Bound::Excluded(value), Bound::Unbounded)) {
+        for (limit, start) in self
+            .limit_to_start
+            .range((Bound::Excluded(value), Bound::Unbounded))
+        {
             if *start <= value {
                 assert!(*limit > value);
                 return Some((*start, *limit));
             } else {
-                break
+                break;
             }
         }
 
         // We look at the first interval whose start is before `value` to see if it overlaps.
-        for (start, limit) in self.start_to_limit.range((Bound::Unbounded, Bound::Included(value))) {
+        for (start, limit) in self
+            .start_to_limit
+            .range((Bound::Unbounded, Bound::Included(value)))
+        {
             if *limit > value {
                 assert!(*start <= value);
                 return Some((*start, *limit));
             } else {
-                break
+                break;
             }
         }
 

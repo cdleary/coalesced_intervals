@@ -1,6 +1,6 @@
 # `coalesced_intervals`: maintain maximally coalesced 1D intervals
 
-![sample usage](docs/coalesced-intervals.png)
+![sample usage diagram](https://raw.githubusercontent.com/cdleary/coalesced_intervals/main/docs/coalesced-intervals.png)
 
 ```rust
 extern crate coalesced_intervals;

@@ -2,7 +2,7 @@
 
 ![sample usage](docs/coalesced-intervals.png)
 
-```
+```rust
 extern crate coalesced_intervals;
 
 fn main() {

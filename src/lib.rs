@@ -1,11 +1,12 @@
 use core::ops::Bound;
+use std::collections::BTreeMap;
+
 /// This is a conceptually simple data structure designed for the case where you have intervals
 /// that you'd like to coalesce into maximal contiguous runs.
 ///
 /// For example, if I add `[0, 1)` and then I add `[1, 2)` I should observe a single contiguous
 /// interval `[0, 2)` in the data structure.
-use std::collections::BTreeMap;
-
+///
 /// Implementation note: we use two btrees, one with the starts as the keys and one with limits as
 /// the keys.
 pub struct CoalescedIntervals<T> {
@@ -14,6 +15,7 @@ pub struct CoalescedIntervals<T> {
 }
 
 impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
+    /// Creates a new (empty) set of maximally coalesced intervals.
     pub fn new() -> Self {
         CoalescedIntervals {
             start_to_limit: BTreeMap::new(),
@@ -21,6 +23,8 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
         }
     }
 
+    /// Checks interval invariants for this data structure -- panics via `assert!` if there are
+    /// internal inconsistencies.
     pub fn check_invariants(&self) {
         // There should be no empty-sized intervals, and data should be reflected symmetrically in
         // both maps.
@@ -56,7 +60,7 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     }
 
     fn is_dominated_by_existing(&self, start: T, limit: T) -> bool {
-        // Look at the first segment that ends at-or-after limit to see if it dominates.
+        // Look at the first interval that ends at-or-after limit to see if it dominates.
         for (_existing_limit, existing_start) in self
             .limit_to_start
             .range((Bound::Included(limit), Bound::Unbounded))
@@ -67,7 +71,7 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
                 break;
             }
         }
-        // Look at the first segment that start at-or-before start to see if it dominates.
+        // Look at the first interval that start at-or-before start to see if it dominates.
         for (_existing_start, existing_limit) in self
             .start_to_limit
             .range((Bound::Unbounded, Bound::Included(start)))
@@ -81,12 +85,15 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
         return false;
     }
 
+    /// Inserts the `[start, limit)` interval into both underlying mappings.
     fn insert_record(&mut self, start: T, limit: T) {
         log::debug!("inserting record: {:?}, {:?}", start, limit);
         self.start_to_limit.insert(start, limit);
         self.limit_to_start.insert(limit, start);
     }
 
+    /// Removes the interval from both mappings that has a start at `value` -- panics if no such
+    /// interval exists.
     fn remove_with_start_at(&mut self, value: T) -> T {
         if let Some((start, limit)) = self.start_to_limit.remove_entry(&value) {
             self.limit_to_start.remove(&limit);
@@ -107,8 +114,8 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
         }
     }
 
-    /// Finds any collision with the left edge of the segment; e.g. where the limit of another
-    /// segment is contained within this segment; i.e.
+    /// Finds any collision with the left edge of the interval; e.g. where the limit of another
+    /// interval is contained within this interval; i.e.
     ///
     /// `start <= other.limit <= limit`
     fn find_collision_left(&self, start: T, limit: T) -> Option<(T, T)> {
@@ -123,8 +130,8 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
         return None;
     }
 
-    /// Finds any collision with the right edge of the segment; e.g. where the start of another
-    /// segment is contained within this segment; i.e.
+    /// Finds any collision with the right edge of the interval; e.g. where the start of another
+    /// interval is contained within this interval; i.e.
     ///
     /// `start <= other.start <= limit`
     fn find_collision_right(&self, start: T, limit: T) -> Option<(T, T)> {
@@ -139,10 +146,9 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
         return None;
     }
 
-    pub fn add(&mut self, item: (T, T)) {
-        let (start, limit) = item;
-
-        // Ignore empty segments.
+    /// Adds the interval `[start, limit)` to the current interval set.
+    pub fn add(&mut self, start: T, limit: T) {
+        // Ignore empty intervals.
         if start == limit {
             return;
         }
@@ -154,11 +160,11 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
 
         self.remove_intervals_dominated_by(start, limit);
 
-        // If our start is another segment's limit, or our limit is another segment's start, we
-        // coalesce them. Note that both may be true simultaneously. The invariant is that
-        // we're maximally coalesced as an invariant, so we don' thave to look for additional
-        // things that coalesce or are dominated by this new larger block, they would have been
-        // colliding which would break the invariant.
+        // If our start is another interval's limit, or our limit is another interval's start, we
+        // coalesce them. Note that both may be true simultaneously. We're maximally coalesced as
+        // an invariant, so we don' thave to look for additional things that coalesce or are
+        // dominated by this new larger block, they would have been colliding which would break the
+        // invariant.
 
         let collision_left: Option<(T, T)> = self.find_collision_left(start, limit);
         let collision_right: Option<(T, T)> = self.find_collision_right(start, limit);
@@ -194,6 +200,37 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
         }
     }
 
+    /// Returns the interval that contains `value`, or `None` if there is none in the current
+    /// interval set.
+    ///
+    /// Note that limits are exclusive, so with the interval set with a single interval `[0, 1)`
+    /// the value `1` is not contained.
+    pub fn get_interval_containing(&self, value: T) -> Option<(T, T)> {
+        // We look at the first interval whose limit is after `value` to see if it overlaps.
+        for (limit, start) in self.limit_to_start.range((Bound::Excluded(value), Bound::Unbounded)) {
+            if *start <= value {
+                assert!(*limit > value);
+                return Some((*start, *limit));
+            } else {
+                break
+            }
+        }
+
+        // We look at the first interval whose start is before `value` to see if it overlaps.
+        for (start, limit) in self.start_to_limit.range((Bound::Unbounded, Bound::Included(value))) {
+            if *limit > value {
+                assert!(*start <= value);
+                return Some((*start, *limit));
+            } else {
+                break
+            }
+        }
+
+        None
+    }
+
+    /// Converts the current interval set to a vector of `[start, limit)` in sorted (ascending)
+    /// order.
     pub fn to_vec(&self) -> Vec<(T, T)> {
         let mut v: Vec<(T, T)> = Vec::with_capacity(self.start_to_limit.len());
         for (start, limit) in self.start_to_limit.iter() {
@@ -213,50 +250,55 @@ mod tests {
         assert_eq!(ivals.to_vec(), []);
     }
 
-    /// Adding a single segment with no area.
+    /// Adding a single interval with no area.
     #[test]
     fn with_empty_range() {
         let mut ivals = CoalescedIntervals::<i64>::new();
-        ivals.add((0, 0));
+        ivals.add(0, 0);
         assert_eq!(ivals.to_vec(), []);
+        assert!(ivals.get_interval_containing(0).is_none());
     }
 
-    /// Adding a single segment (that has area in it).
+    /// Adding a single interval (that has area in it).
     #[test]
-    fn one_segment_range() {
+    fn one_interval_range() {
         let mut ivals = CoalescedIntervals::<i64>::new();
-        ivals.add((0, 1));
+        ivals.add(0, 1);
         assert_eq!(ivals.to_vec(), [(0, 1)]);
+        assert_eq!(ivals.get_interval_containing(0), Some((0, 1)));
+        assert!(ivals.get_interval_containing(1).is_none());
     }
 
-    /// Adding two segments that coalesce.
+    /// Adding two intervals that coalesce.
     #[test]
-    fn two_segment_abutted() {
+    fn two_interval_abutted() {
         let mut ivals = CoalescedIntervals::<i64>::new();
-        ivals.add((0, 1));
-        ivals.add((1, 2));
+        ivals.add(0, 1);
+        assert!(ivals.get_interval_containing(1).is_none());
+        ivals.add(1, 2);
         assert_eq!(ivals.to_vec(), [(0, 2)]);
+        assert_eq!(ivals.get_interval_containing(1), Some((0, 2)));
     }
 
-    /// Adding three segments that coalesce when third one shows up.
+    /// Adding three intervals that coalesce when third one shows up.
     #[test]
-    fn three_segment_abutted() {
+    fn three_interval_abutted() {
         let _ = env_logger::try_init();
         let mut ivals = CoalescedIntervals::<i64>::new();
-        ivals.add((0, 1));
-        ivals.add((2, 3));
+        ivals.add(0, 1);
+        ivals.add(2, 3);
         assert_eq!(ivals.to_vec(), [(0, 1), (2, 3)]);
-        ivals.add((1, 2));
+        ivals.add(1, 2);
         assert_eq!(ivals.to_vec(), [(0, 3)]);
     }
 
-    /// Adding a smaller segment when a larger segment is already present with the same start.
+    /// Adding a smaller interval when a larger interval is already present with the same start.
     #[test]
     fn test_smaller_on_larger() {
         let mut ivals = CoalescedIntervals::<i64>::new();
-        ivals.add((0, 3));
+        ivals.add(0, 3);
         assert_eq!(ivals.to_vec(), [(0, 3)]);
-        ivals.add((0, 1));
+        ivals.add(0, 1);
         assert_eq!(ivals.to_vec(), [(0, 3)]);
     }
 
@@ -265,9 +307,9 @@ mod tests {
     fn test_partial_overlap() {
         let _ = env_logger::try_init();
         let mut ivals = CoalescedIntervals::<i64>::new();
-        ivals.add((0, 3));
+        ivals.add(0, 3);
         assert_eq!(ivals.to_vec(), [(0, 3)]);
-        ivals.add((2, 4));
+        ivals.add(2, 4);
         assert_eq!(ivals.to_vec(), [(0, 4)]);
     }
 }

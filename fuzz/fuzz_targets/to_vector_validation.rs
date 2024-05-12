@@ -1,25 +1,32 @@
 #![no_main]
 
+use std::collections::HashSet;
+
 use coalesced_intervals::CoalescedIntervals;
 
 use libfuzzer_sys::{arbitrary::{Arbitrary, Error, Unstructured}, fuzz_target};
 
 #[derive(Debug)]
 struct IntervalsToInsert {
-    ivals: Vec<(i8, i8)>
+    ivals: Vec<(i8, i8)>,
+    included: HashSet<i8>,
 }
 
 impl<'a> Arbitrary<'a> for IntervalsToInsert {
     fn arbitrary(raw: &mut Unstructured<'a>) -> Result<Self, Error> {
+        let mut included = HashSet::new();
         let size = raw.arbitrary_len::<u8>()?;
         let mut ivals = Vec::with_capacity(size);
         for _ in 0..size {
             let start: i8 = raw.int_in_range(-128..=127)?;
             let limit: i8 = raw.int_in_range(start..=127)?;
             ivals.push((start, limit));
+            for i in start..limit {
+                included.insert(i);
+            }
         }
 
-        Ok(IntervalsToInsert{ivals})
+        Ok(IntervalsToInsert{ivals, included})
     }
 }
 
@@ -48,10 +55,18 @@ fn check_vector(v: Vec<(i8, i8)>) {
 fuzz_target!(|ivals: IntervalsToInsert| {
     let mut coalesced = CoalescedIntervals::<i8>::new();
     for (start, limit) in ivals.ivals.iter() {
-        coalesced.add((*start, *limit));
+        coalesced.add(*start, *limit);
     }
 
     coalesced.check_invariants();
+
+    for i in i8::MIN..i8::MAX {
+        if ivals.included.contains(&i) {
+            assert!(coalesced.get_interval_containing(i).is_some());
+        } else {
+            assert!(coalesced.get_interval_containing(i).is_none());
+        }
+    }
 
     let v = coalesced.to_vec();
     log::debug!("v: {:?}", v);

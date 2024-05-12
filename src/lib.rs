@@ -235,6 +235,19 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
         None
     }
 
+    /// Returns the first interval whose start is >= `value`.
+    ///
+    /// If there is no such interval, `None` is returned.
+    pub fn get_first_start_from(&self, value: T) -> Option<(T, T)> {
+        for (start, limit) in self
+            .start_to_limit
+            .range((Bound::Included(value), Bound::Unbounded))
+        {
+            return Some((*start, *limit));
+        }
+        None
+    }
+
     /// Converts the current interval set to a vector of `[start, limit)` in sorted (ascending)
     /// order.
     pub fn to_vec(&self) -> Vec<(T, T)> {
@@ -263,6 +276,7 @@ mod tests {
         ivals.add(0, 0);
         assert_eq!(ivals.to_vec(), []);
         assert!(ivals.get_interval_containing(0).is_none());
+        assert!(ivals.get_first_start_from(0).is_none());
     }
 
     /// Adding a single interval (that has area in it).
@@ -271,8 +285,14 @@ mod tests {
         let mut ivals = CoalescedIntervals::<i64>::new();
         ivals.add(0, 1);
         assert_eq!(ivals.to_vec(), [(0, 1)]);
+
+        assert_eq!(ivals.get_first_start_from(-1), Some((0, 1)));
+
         assert_eq!(ivals.get_interval_containing(0), Some((0, 1)));
+        assert_eq!(ivals.get_first_start_from(0), Some((0, 1)));
+
         assert!(ivals.get_interval_containing(1).is_none());
+        assert!(ivals.get_first_start_from(1).is_none());
     }
 
     /// Adding two intervals that coalesce.
@@ -284,6 +304,9 @@ mod tests {
         ivals.add(1, 2);
         assert_eq!(ivals.to_vec(), [(0, 2)]);
         assert_eq!(ivals.get_interval_containing(1), Some((0, 2)));
+
+        // The coalesced interval starts from 0 so this gives us `None`.
+        assert!(ivals.get_first_start_from(1).is_none());
     }
 
     /// Adding three intervals that coalesce when third one shows up.
@@ -294,8 +317,10 @@ mod tests {
         ivals.add(0, 1);
         ivals.add(2, 3);
         assert_eq!(ivals.to_vec(), [(0, 1), (2, 3)]);
+        assert_eq!(ivals.get_first_start_from(1), Some((2, 3)));
         ivals.add(1, 2);
         assert_eq!(ivals.to_vec(), [(0, 3)]);
+        assert_eq!(ivals.get_first_start_from(1), None);
     }
 
     /// Adding a smaller interval when a larger interval is already present with the same start.
@@ -317,5 +342,18 @@ mod tests {
         assert_eq!(ivals.to_vec(), [(0, 3)]);
         ivals.add(2, 4);
         assert_eq!(ivals.to_vec(), [(0, 4)]);
+    }
+
+    /// Adding an interval `[MIN, MIN+1)` and seeing if we can find it by passing the `MIN` value
+    /// to `get_first_start_from`. The `MIN` value shouldn't hold any surprises in this regard.
+    #[test]
+    fn test_get_first_start_from_min_value() {
+        let _ = env_logger::try_init();
+        let mut ivals = CoalescedIntervals::<i8>::new();
+        ivals.add(i8::MIN, i8::MIN + 1);
+        assert_eq!(
+            ivals.get_first_start_from(i8::MIN),
+            Some((i8::MIN, i8::MIN + 1))
+        );
     }
 }

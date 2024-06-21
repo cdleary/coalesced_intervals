@@ -41,6 +41,7 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     /// To be dominated by this interval the candidate_start must be >= start and candidate_limit
     /// must be <= limit.
     fn remove_intervals_dominated_by(&mut self, start: T, limit: T) {
+        assert!(start <= limit);
         let mut dominated = vec![];
         for (candidate_start, candidate_limit) in self
             .start_to_limit
@@ -60,6 +61,7 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     }
 
     fn is_dominated_by_existing(&self, start: T, limit: T) -> bool {
+        assert!(start <= limit);
         // Look at the first interval that ends at-or-after limit to see if it dominates.
         for (_existing_limit, existing_start) in self
             .limit_to_start
@@ -87,6 +89,7 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
 
     /// Inserts the `[start, limit)` interval into both underlying mappings.
     fn insert_record(&mut self, start: T, limit: T) {
+        assert!(start <= limit);
         log::debug!("inserting record: {:?}, {:?}", start, limit);
         self.start_to_limit.insert(start, limit);
         self.limit_to_start.insert(limit, start);
@@ -119,6 +122,7 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     ///
     /// `start <= other.limit <= limit`
     fn find_collision_left(&self, start: T, limit: T) -> Option<(T, T)> {
+        assert!(start <= limit);
         for (other_limit, other_start) in self
             .limit_to_start
             .range((Bound::Included(start), Bound::Included(limit)))
@@ -135,6 +139,7 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
     ///
     /// `start <= other.start <= limit`
     fn find_collision_right(&self, start: T, limit: T) -> Option<(T, T)> {
+        assert!(start <= limit);
         for (other_start, other_limit) in self
             .start_to_limit
             .range((Bound::Included(start), Bound::Included(limit)))
@@ -148,6 +153,7 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
 
     /// Adds the interval `[start, limit)` to the current interval set.
     pub fn add(&mut self, start: T, limit: T) {
+        assert!(start <= limit);
         // Ignore empty intervals.
         if start == limit {
             return;
@@ -246,6 +252,57 @@ impl<T: Copy + std::cmp::Ord + std::fmt::Debug> CoalescedIntervals<T> {
             return Some((*start, *limit));
         }
         None
+    }
+
+    /// Returns the first interval whose limit is < `value`.
+    ///
+    /// If there is no such interval, `None` is returned.
+    pub fn get_first_limit_before(&self, value: T) -> Option<(T, T)> {
+        for (limit, start) in self
+            .limit_to_start
+            .range((Bound::Unbounded, Bound::Excluded(value)))
+        {
+            return Some((*start, *limit));
+        }
+        None
+    }
+
+    /// Returns whether there is a partial overlap in the interval `[start, limit)`.
+    ///
+    /// That is, returns true iff there is any intersection between `[start, limit)`
+    /// and the coalesced intervals held in this data structure.
+    ///
+    /// When the interval given is empty, this function returns whether the point is
+    /// contained within any interval in this data structure.
+    pub fn contains_partial(&self, start: T, limit: T) -> bool {
+        assert!(start <= limit);
+        if start == limit {
+            return self.get_interval_containing(start).is_some();
+        }
+
+        if self.is_dominated_by_existing(start, limit) {
+            return true;
+        }
+
+        match self.get_first_start_from(start) {
+            Some((next_start, _next_limit)) => {
+                if next_start < limit {
+                    return true;
+                }
+            }
+            None => {}
+        }
+
+        match self.get_first_limit_before(limit) {
+            Some((_prev_start, prev_limit)) => {
+                if prev_limit > start {
+                    return true;
+                }
+            }
+            None => {}
+        }
+
+        return false;
     }
 
     /// Converts the current interval set to a vector of `[start, limit)` in sorted (ascending)
@@ -355,5 +412,22 @@ mod tests {
             ivals.get_first_start_from(i8::MIN),
             Some((i8::MIN, i8::MIN + 1))
         );
+    }
+
+    #[test]
+    fn test_contains_partial() {
+        let mut ivals = CoalescedIntervals::<i64>::new();
+        ivals.add(0, 3);
+        assert!(ivals.contains_partial(0, 1));
+        assert!(ivals.contains_partial(1, 2));
+        assert!(ivals.contains_partial(2, 3));
+        assert!(ivals.contains_partial(1, 3));
+        assert!(ivals.contains_partial(0, 2));
+        assert!(ivals.contains_partial(2, 4));
+        assert!(ivals.contains_partial(-1, 1));
+
+        assert!(!ivals.contains_partial(3, 3));
+        assert!(!ivals.contains_partial(3, 4));
+        assert!(!ivals.contains_partial(-1, 0));
     }
 }

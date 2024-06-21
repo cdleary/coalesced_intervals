@@ -37,11 +37,11 @@ impl<'a> Arbitrary<'a> for IntervalsToInsert {
     }
 }
 
-fn check_vector(v: Vec<(i8, i8)>) {
+fn check_vector(v: &Vec<(i8, i8)>) {
     // Check the vector is sorted.
     let mut v_clone = v.clone();
     v_clone.sort();
-    assert_eq!(v, v_clone);
+    assert_eq!(*v, v_clone);
 
     for i in 0..v.len() {
         let (start, limit) = v[i];
@@ -63,6 +63,11 @@ fuzz_target!(|ivals: IntervalsToInsert| {
     let mut coalesced = CoalescedIntervals::<i8>::new();
     for (start, limit) in ivals.ivals.iter() {
         coalesced.add(*start, *limit);
+
+        // Now that we've added this interval, we should be able to see that the data structure contains it, so long as it was not empty.
+        if start < limit {
+            assert!(coalesced.contains_partial(*start, *limit));
+        }
     }
 
     coalesced.check_invariants();
@@ -109,6 +114,26 @@ fuzz_target!(|ivals: IntervalsToInsert| {
     // from" based traversal.
     assert_eq!(v, seen);
 
+    // Checks that all the intervals in the vector are "partial overlaps".
+    for (start, limit) in v.iter() {
+        assert!(coalesced.contains_partial(*start, *limit));
+    }
+
     log::debug!("v: {:?}", v);
-    check_vector(v)
+    check_vector(&v);
+
+    // Make the set of holes in the original by zipping (i_limit, ip1_start).
+    if v.is_empty() {
+        return;
+    }
+    let mut holes = CoalescedIntervals::new();
+    for i in 0..v.len()-1 {
+        let (_, i_limit) = v[i];
+        let (ip1_start, _) = v[i+1];
+        holes.add(i_limit, ip1_start);
+    }
+    // Make sure the original doesn't contain any of these holes.
+    for (hole_start, hole_limit) in holes.to_vec() {
+        assert!(!coalesced.contains_partial(hole_start, hole_limit));
+    }
 });

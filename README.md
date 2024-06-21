@@ -17,6 +17,12 @@ fn main() {
     ivals.add(1, 2);
     assert_eq!(ivals.to_vec(), [(0, 3)]);
 
+    // We can see that the coalesced interval has partial overlap
+    // with other related intervals.
+    assert!(ivals.contains_partial(-1, 1));
+    assert!(ivals.contains_partial(1, 2));
+    assert!(ivals.contains_partial(2, 4));
+
     // We can ask for the interval containing some target value.
     assert_eq!(ivals.get_interval_containing(1), Some((0, 3)));
     assert_eq!(ivals.get_interval_containing(4), None);
